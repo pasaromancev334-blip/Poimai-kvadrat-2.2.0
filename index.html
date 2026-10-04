@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Поймай квадрат v2.2.0</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: #1a1a2e; color: #fff;
+    font-family: system-ui, sans-serif;
+    user-select: none;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+
+  #app {
+    width: 100%; max-width: 400px;
+    height: 100%; max-height: 700px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .screen {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    opacity: 0; pointer-events: none;
+    transform: translateY(20px);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .screen.active {
+    opacity: 1; pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  /* ─── Главное меню ─── */
+  .logo {
+    font-size: 34px; font-weight: 800;
+    color: #fff; text-align: center;
+    line-height: 1.1;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+  }
+  .logo span { color: #4ade80; }
+  .logo-emoji {
+    font-size: 40px; margin-bottom: 8px;
+    letter-spacing: 4px;
+  }
+  .subtitle {
+    font-size: 12px; color: #4ade80;
+    letter-spacing: 3px; opacity: 0.8;
+    margin-bottom: 30px;
+  }
+
+  .menu-btn {
+    width: 100%; padding: 16px 20px;
+    background: #16213e; color: #fff;
+    border: 1px solid #2a3a5e;
+    border-radius: 14px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 14px;
+    transition: all 0.15s;
+    margin-bottom: 12px;
+    text-align: left;
+  }
+  .menu-btn:hover {
+    background: #1e2d4f;
+    border-color: #4ade80;
+    transform: translateY(-1px);
+  }
+  .menu-btn:active { transform: scale(0.97); }
+  .menu-btn .icon {
+    font-size: 22px;
+    width: 30px; text-align: center;
+  }
+  .menu-btn .label { flex: 1; }
+  .menu-btn .sub {
+    font-size: 11px; color: #4ade80;
+    opacity: 0.7; font-weight: 400;
+  }
+  .menu-btn.primary {
+    background: #4ade80; color: #1a1a2e;
+    border: none;
+    justify-content: center;
+    font-size: 17px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(74, 222, 128, 0.25);
+  }
+  .menu-btn.primary:hover {
+    background: #22c55e;
+    transform: translateY(-2px);
+  }
+
+  .topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: center;
+    padding: 14px 16px;
+    z-index: 5;
+  }
+  .back-btn {
+    background: transparent; color: #4ade80;
+    border: 1px solid #4ade80;
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+  }
+  .back-btn:hover { background: rgba(74, 222, 128, 0.15); }
+  .topbar h2 {
+    flex: 1; text-align: center;
+    font-size: 16px; font-weight: 600;
+    margin-right: 38px;
+  }
+
+  /* ─── Игра ─── */
+  #stats {
+    display: flex; gap: 12px; margin-bottom: 10px;
+    font-size: 14px; color: #aaa; flex-wrap: wrap;
+    justify-content: center; align-items: center;
+    margin-top: 20px;
+  }
+  #stats b { color: #4ade80; }
+  #lives { color: #ef4444; letter-spacing: 2px; font-size: 15px; }
+  #combo { color: #facc15; font-weight: bold; min-width: 60px; text-align: center; }
+  #timer {
+    width: 320px; max-width: 100%; height: 6px; background: #16213e;
+    border-radius: 3px; margin-bottom: 12px; overflow: hidden;
+  }
+  #timerFill { height: 100%; width: 100%; background: #4ade80; transition: width 0.1s linear; }
+  #game {
+    position: relative; width: 320px; height: 320px; max-width: 100%;
+    background: #16213e; border-radius: 12px;
+    overflow: hidden; cursor: crosshair;
+    box-shadow: 0 0 30px rgba(74, 222, 128, 0.15);
+    transition: box-shadow 0.2s;
+    margin-bottom: 12px;
+  }
+  #game.frozen { box-shadow: 0 0 40px rgba(96, 165, 250, 0.6); cursor: not-allowed; }
+  #freezeBadge {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    background: rgba(96, 165, 250, 0.9); color: #fff;
+    padding: 4px 12px; border-radius: 12px;
+    font-size: 12px; font-weight: bold;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 5;
+  }
+  #game.frozen #freezeBadge { opacity: 1; }
+  .obj {
+    position: absolute; width: 50px; height: 50px;
+    border-radius: 10px; cursor: pointer;
+    transition: transform 0.06s, filter 0.25s;
+  }
+  .obj:active { transform: scale(0.85); }
+  .obj.normal { background: linear-gradient(135deg, #4ade80, #22c55e); box-shadow: 0 0 20px rgba(74, 222, 128, 0.5); }
+  .obj.gold { background: linear-gradient(135deg, #facc15, #f59e0b); box-shadow: 0 0 25px rgba(250, 204, 21, 0.7); }
+  .obj.bomb { background: radial-gradient(circle at 30% 30%, #555, #111); box-shadow: 0 0 25px rgba(239, 68, 68, 0.8); border: 2px solid #ef4444; }
+  .obj.freeze { background: linear-gradient(135deg, #60a5fa, #3b82f6); box-shadow: 0 0 25px rgba(96, 165, 250, 0.8); }
+  #game.frozen .obj { filter: brightness(0.7); }
+  .popup {
+    position: absolute; pointer-events: none;
+    font-weight: bold; font-size: 16px;
+    animation: rise 0.7s ease-out forwards;
+    text-shadow: 0 0 8px rgba(0,0,0,0.8); z-index: 6;
+  }
+  @keyframes rise {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-40px); }
+  }
+
+  #gameStart {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.9);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; z-index: 10; text-align: center; padding: 18px;
+  }
+  #gameStart.hidden { display: none; }
+  #gameStart h2 { font-size: 22px; }
+  #gameStart p { color: #aaa; font-size: 12.5px; max-width: 270px; line-height: 1.5; }
+
+  .legend {
+    display: flex; gap: 10px; font-size: 11px; color: #888;
+    flex-wrap: wrap; justify-content: center; max-width: 280px;
+  }
+  .legend span::before {
+    content: ''; display: inline-block; width: 10px; height: 10px;
+    border-radius: 3px; margin-right: 4px; vertical-align: middle;
+  }
+  .legend .l-green::before { background: #4ade80; }
+  .legend .l-gold::before { background: #facc15; }
+  .legend .l-bomb::before { background: #ef4444; }
+  .legend .l-freeze::before { background: #60a5fa; }
+
+  .levels { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .levels button {
+    padding: 7px 12px; font-size: 12px; font-weight: 600;
+    background: #16213e; color: #fff; border: 1px solid #4ade80;
+    border-radius: 8px; cursor: pointer;
+  }
+  .levels button.active { background: #4ade80; color: #1a1a2e; }
+
+  #nameInput {
+    padding: 8px 12px; font-size: 14px;
+    background: #16213e; color: #fff;
+    border: 1px solid #4ade80; border-radius: 8px;
+    text-align: center; width: 200px;
+  }
+  #nameInput::placeholder { color: #666; }
+
+  #startBtn {
+    padding: 12px 28px; font-size: 16px; font-weight: bold;
+    background: #4ade80; color: #1a1a2e; border: none;
+    border-radius: 8px; cursor: pointer; margin-top: 4px;
+  }
+  #startBtn:hover { background: #22c55e; }
+
+  .linkBtn {
+    background: transparent; color: #4ade80; border: 1px solid #4ade80;
+    padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .linkBtn:hover { background: rgba(74, 222, 128, 0.1); }
+
+  .tgBtn {
+    display: inline-block; text-decoration: none;
+    background: #229ED9; color: #fff; border: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+    margin-top: 20px;
+    transition: background 0.15s;
+    text-align: center;
+  }
+  .tgBtn:hover { background: #1d8ec2; }
+
+  #boardList { list-style: none; width: 260px; }
+  #boardList li {
+    display: flex; justify-content: space-between;
+    padding: 8px 12px; font-size: 14px;
+    border-bottom: 1px solid #222; color: #ccc;
+  }
+  #boardList li.top1 { color: #facc15; font-weight: bold; }
+  #boardList li.top2 { color: #c0c0c0; }
+  #boardList li.top3 { color: #cd7f32; }
+  #boardList li .name { color: #4ade80; }
+  #boardList li .empty { color: #444; }
+  #boardLoading { color: #4ade80; font-size: 13px; }
+
+  #changelogList {
+    width: 280px; max-height: 340px; overflow-y: auto;
+    text-align: left; font-size: 12px; line-height: 1.5;
+    color: #ccc; padding-right: 6px;
+  }
+  #changelogList .ver {
+    color: #4ade80; font-weight: bold; font-size: 13px;
+    margin-top: 10px; margin-bottom: 3px;
+  }
+  #changelogList .ver:first-child { margin-top: 0; }
+  #changelogList .item { color: #aaa; padding-left: 10px; }
+  #changelogList .item::before { content: '• '; color: #666; }
+  #changelogList::-webkit-scrollbar { width: 4px; }
+  #changelogList::-webkit-scrollbar-thumb { background: #4ade80; border-radius: 2px; }
+
+  .placeholder {
+    text-align: center; color: #666;
+    font-size: 14px; line-height: 1.8;
+    padding: 20px;
+  }
+  .placeholder .big { font-size: 48px; margin-bottom: 10px; }
+
+  #cheatWarning {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: #ef4444; color: #fff; padding: 16px 24px;
+    border-radius: 10px; font-weight: bold; text-align: center;
+    display: none; z-index: 999; max-width: 280px;
+    box-shadow: 0 10px 40px rgba(239, 68, 68, 0.5);
+  }
+  #cheatWarning.show { display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="cheatWarning">🚫 Обнаружена накрутка!<br><small>Очки не сохранены</small></div>
+
+  <!-- ═══ ГЛАВНОЕ МЕНЮ ═══ -->
+  <div class="screen active" id="screenMenu">
+    <div class="logo-emoji">🟩 🟨 💣</div>
+    <div class="logo">Поймай<br><span>квадрат</span></div>
+    <div class="subtitle">v2.2.0 · 🛡️ античит</div>
+
+    <button class="menu-btn primary" onclick="showScreen('screenGame')">
+      <span class="icon">▶</span>
+      <span class="label">ИГРАТЬ</span>
+    </button>
+
+    <button class="menu-btn" onclick="showScreen('screenBoard')">
+      <span class="icon">🏆</span>
+      <span class="label">Рекорды<span class="sub"><br>топ-10 игроков</span></span>
+    </button>
+
+    <button class="menu-btn" onclick="showScreen('screenDuel')">
+      <span class="icon">⚔️</span>
+      <span class="label">Дуэль<span class="sub"><br>скоро</span></span>
+    </button>
+
+    <button class="menu-btn" onclick="showScreen('screenBP')">
+      <span class="icon">🎁</span>
+      <span class="label">Battle Pass<span class="sub"><br>скоро</span></span>
+    </button>
+
+    <button class="menu-btn" onclick="showScreen('screenChangelog')">
+      <span class="icon">ℹ️</span>
+      <span class="label">Что нового</span>
+    </button>
+
+    <a class="tgBtn" href="https://t.me/Poimait" target="_blank" rel="noopener">
+      📢 Наш Telegram-канал
+    </a>
+  </div>
+
+  <!-- ═══ ЭКРАН ИГРЫ ═══ -->
+  <div class="screen" id="screenGame">
+    <div class="topbar">
+      <button class="back-btn" onclick="backToMenu()">←</button>
+      <h2>Игра</h2>
+    </div>
+
+    <div id="stats">
+      <div>Очки: <b id="score">0</b></div>
+      <div>Рекорд: <b id="best">0</b></div>
+      <div id="lives">❤❤❤</div>
+      <div id="combo"></div>
+    </div>
+    <div id="timer"><div id="timerFill"></div></div>
+    <div id="game">
+      <div id="freezeBadge">Заморозка — клики заблокированы</div>
+      <div id="gameStart">
+        <h2>Готов?</h2>
+        <p>Лови квадраты, избегай бомб. У тебя 3 жизни.</p>
+        <input id="nameInput" type="text" maxlength="12" placeholder="Твоё имя (до 12 букв)" />
+        <div class="legend">
+          <span class="l-green">+очки</span>
+          <span class="l-gold">x3 очка</span>
+          <span class="l-bomb">−жизнь</span>
+          <span class="l-freeze">заморозка 3с</span>
+        </div>
+        <div class="levels">
+          <button data-speed="1300" data-time="30">Легко</button>
+          <button data-speed="900" data-time="30" class="active">Норма</button>
+          <button data-speed="600" data-time="25">Сложно</button>
+        </div>
+        <button id="startBtn">Начать игру</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ЭКРАН РЕКОРДОВ ═══ -->
+  <div class="screen" id="screenBoard">
+    <div class="topbar">
+      <button class="back-btn" onclick="backToMenu()">←</button>
+      <h2>🏆 Топ-10</h2>
+    </div>
+    <div id="boardLoading">Загрузка...</div>
+    <ul id="boardList"></ul>
+  </div>
+
+  <!-- ═══ ЭКРАН ДУЭЛИ ═══ -->
+  <div class="screen" id="screenDuel">
+    <div class="topbar">
+      <button class="back-btn" onclick="backToMenu()">←</button>
+      <h2>⚔️ Дуэль</h2>
+    </div>
+    <div class="placeholder">
+      <div class="big">⚔️</div>
+      <b>Дуэли скоро появятся!</b><br>
+      Играйте с друзьями<br>
+      на одном устройстве или онлайн
+    </div>
+    <button class="linkBtn" onclick="backToMenu()">← В меню</button>
+  </div>
+
+  <!-- ═══ ЭКРАН BATTLE PASS ═══ -->
+  <div class="screen" id="screenBP">
+    <div class="topbar">
+      <button class="back-btn" onclick="backToMenu()">←</button>
+      <h2>🎁 Battle Pass</h2>
+    </div>
+    <div class="placeholder">
+      <div class="big">🎁</div>
+      <b>Battle Pass в разработке!</b><br>
+      Получайте XP за игры<br>
+      и открывайте скины
+    </div>
+    <button class="linkBtn" onclick="backToMenu()">← В меню</button>
+  </div>
+
+  <!-- ═══ ЭКРАН CHANGELOG ═══ -->
+  <div class="screen" id="screenChangelog">
+    <div class="topbar">
+      <button class="back-btn" onclick="backToMenu()">←</button>
+      <h2>Что нового</h2>
+    </div>
+    <div id="changelogList"></div>
+  </div>
+
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js';
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } 
+  from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAoz2mA1U3k2tfRKAnP4cRjYIYkqb6LOqE",
+  authDomain: "poimai-kvadrat.firebaseapp.com",
+  projectId: "poimai-kvadrat",
+  storageBucket: "poimai-kvadrat.firebasestorage.app",
+  messagingSenderId: "1093422124104",
+  appId: "1:1093422124104:web:af2e4e767f2c63c6081c7d"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const GAME_VERSION = "2.2.0";
+const BOARD_CACHE_KEY = "online_board_cache";
+
+/* ═══ АНТИЧИТ ═══ */
+const MAX_SCORE = 500;
+const MAX_POINTS_PER_SEC = 50;
+const MIN_CLICK_INTERVAL = 50;
+const MIN_GAME_TIME = 5;
+
+const game = document.getElementById('game');
+const gameStart = document.getElementById('gameStart');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const comboEl = document.getElementById('combo');
+const livesEl = document.getElementById('lives');
+const timerFill = document.getElementById('timerFill');
+const nameInput = document.getElementById('nameInput');
+const levelBtns = document.querySelectorAll('.levels button');
+const startBtn = document.getElementById('startBtn');
+const boardList = document.getElementById('boardList');
+const boardLoading = document.getElementById('boardLoading');
+const changelogList = document.getElementById('changelogList');
+const cheatWarning = document.getElementById('cheatWarning');
+
+let score = 0, timeLeft = 30, totalTime = 30;
+let playing = false, combo = 0, lives = 3;
+let speed = 900;
+let hideTimer = null, tickTimer = null, freezeTimer = null;
+let frozen = false, ended = false, current = null;
+let levelName = "Норма";
+
+let clickCount = 0;
+let lastClickTime = 0;
+let clickIntervals = [];
+let gameStartTime = 0;
+let cheatDetected = false;
+
+let playerName = localStorage.getItem('playerName') || '';
+if (playerName) nameInput.value = playerName;
+let best = +(localStorage.getItem('bestScore') || 0);
+bestEl.textContent = best;
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(freq, dur = 0.08, type = 'sine', vol = 0.15) {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+  } catch (e) {}
+}
+
+/* ═══ Навигация ═══ */
+window.showScreen = function(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screenBoard') loadAndRenderBoard();
+  if (id === 'screenChangelog') renderChangelog();
+};
+
+window.backToMenu = function() {
+  if (playing) {
+    playing = false;
+    clearTimeout(hideTimer);
+    clearTimeout(freezeTimer);
+    clearInterval(tickTimer);
+    if (current) { current.el.remove(); current = null; }
+    game.classList.remove('frozen');
+    gameStart.classList.remove('hidden');
+  }
+  showScreen('screenMenu');
+};
+
+/* ═══ Античит ═══ */
+function sanitizeName(name) {
+  return String(name)
+    .replace(/[^a-zA-Zа-яА-ЯёЁ0-9 _-]/g, '')
+    .trim()
+    .slice(0, 12) || 'Аноним';
+}
+
+function registerClick() {
+  const now = performance.now();
+  if (lastClickTime > 0) {
+    const interval = now - lastClickTime;
+    clickIntervals.push(interval);
+    if (interval < MIN_CLICK_INTERVAL) {
+      console.warn('⚠️ Античит: слишком быстрые клики', interval);
+      cheatDetected = true;
+    }
+  }
+  lastClickTime = now;
+  clickCount++;
+}
+
+function validateFinalScore() {
+  const elapsed = (performance.now() - gameStartTime) / 1000;
+  const issues = [];
+
+  if (score > MAX_SCORE) issues.push(`Очки превышают максимум`);
+  if (score / elapsed > MAX_POINTS_PER_SEC) issues.push(`Слишком много очков/сек`);
+  if (elapsed < MIN_GAME_TIME) issues.push(`Слишком короткая игра`);
+
+  if (clickIntervals.length > 5) {
+    const avg = clickIntervals.reduce((a, b) => a + b, 0) / clickIntervals.length;
+    if (avg < MIN_CLICK_INTERVAL) issues.push(`Автокликер`);
+  }
+
+  if (clickCount > 0) {
+    const perClick = score / clickCount;
+    if (perClick > 15) issues.push(`Слишком много очков за клик`);
+  }
+
+  if (clickCount > 200) issues.push(`Слишком много кликов`);
+
+  if (issues.length > 0) {
+    console.warn('🚫 Античит:', issues);
+    cheatDetected = true;
+    return false;
+  }
+  return true;
+}
+
+function showCheatWarning() {
+  cheatWarning.classList.add('show');
+  setTimeout(() => cheatWarning.classList.remove('show'), 3000);
+}
+
+/* ═══ Игра ═══ */
+function pickType() {
+  const r = Math.random();
+  if (r < 0.60) return 'normal';
+  if (r < 0.75) return 'gold';
+  if (r < 0.93) return 'bomb';
+  return 'freeze';
+}
+
+function spawn() {
+  if (current) { current.el.remove(); current = null; }
+  if (!playing) return;
+  const w = game.clientWidth || 320;
+  const h = game.clientHeight || 320;
+  const maxX = Math.max(0, w - 50);
+  const maxY = Math.max(0, h - 50);
+  const el = document.createElement('div');
+  const type = pickType();
+  el.className = 'obj ' + type;
+  el.style.left = Math.random() * maxX + 'px';
+  el.style.top = Math.random() * maxY + 'px';
+  game.appendChild(el);
+  const obj = { el, type };
+  current = obj;
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!playing || current !== obj) return;
+    handleHit(obj, e);
+  });
+  scheduleHide();
+}
+
+function scheduleHide() {
+  clearTimeout(hideTimer);
+  if (!playing || frozen) return;
+  hideTimer = setTimeout(() => {
+    if (!playing || frozen) return;
+    if (current && current.type !== 'gold') { combo = 0; updateCombo(); }
+    spawn();
+  }, speed);
+}
+
+function handleHit(obj, e) {
+  registerClick();
+  const rect = game.getBoundingClientRect();
+  const px = e.clientX - rect.left - 10;
+  const py = e.clientY - rect.top - 20;
+
+  if (frozen) {
+    showPopup(px, py, obj.type === 'freeze' ? 'уже активно' : 'заморозка', '#60a5fa');
+    if (obj.type !== 'bomb' && obj.type !== 'freeze') {
+      if (current) { current.el.remove(); current = null; }
+    }
+    return;
+  }
+
+  if (obj.type === 'bomb') {
+    lives--; updateLives();
+    beep(120, 0.25, 'sawtooth', 0.25);
+    showPopup(px, py, '-жизнь', '#ef4444');
+    combo = 0; updateCombo();
+    if (lives <= 0) { endGame(); return; }
+  } else if (obj.type === 'freeze') {
+    combo = 0; updateCombo();
+    activateFreeze();
+    showPopup(px, py, 'заморозка', '#60a5fa');
+    beep(1200, 0.15, 'sine');
+  } else {
+    const gold = obj.type === 'gold';
+    combo++;
+    const mult = Math.min(Math.floor(combo / 3) + 1, 5);
+    const points = (gold ? 3 : 1) * mult;
+    score += points;
+    scoreEl.textContent = score;
+    updateCombo();
+    showPopup(px, py, '+' + points, gold ? '#facc15' : '#4ade80');
+    beep(gold ? 880 : 660, 0.07);
+  }
+  spawn();
+}
+
+function activateFreeze() {
+  frozen = true;
+  clearTimeout(hideTimer); clearTimeout(freezeTimer); clearInterval(tickTimer);
+  game.classList.add('frozen');
+  freezeTimer = setTimeout(() => {
+    frozen = false;
+    game.classList.remove('frozen');
+    resumeTimer();
+    spawn();
+  }, 3000);
+}
+
+function resumeTimer() {
+  clearInterval(tickTimer);
+  tickTimer = setInterval(() => {
+    if (!playing || frozen) return;
+    timeLeft -= 0.1;
+    timerFill.style.width = Math.max(0, timeLeft / totalTime * 100) + '%';
+    if (timeLeft <= 0) endGame();
+  }, 100);
+}
+
+function showPopup(x, y, text, color = '#facc15') {
+  const p = document.createElement('div');
+  p.className = 'popup';
+  p.textContent = text;
+  p.style.left = x + 'px'; p.style.top = y + 'px'; p.style.color = color;
+  game.appendChild(p);
+  setTimeout(() => p.remove(), 700);
+}
+
+function updateCombo() { comboEl.textContent = combo > 1 ? 'x' + Math.min(combo, 5) : ''; }
+function updateLives() {
+  livesEl.textContent = '❤'.repeat(Math.max(0, lives)) + '♡'.repeat(Math.max(0, 3 - lives));
+}
+
+game.addEventListener('click', () => {
+  if (!playing) return;
+  registerClick();
+  combo = 0; updateCombo();
+  beep(200, 0.05, 'square', 0.08);
+});
+
+levelBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    levelBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    speed = +btn.dataset.speed;
+    totalTime = +btn.dataset.time;
+    levelName = btn.textContent.trim();
+  });
+});
+
+/* ═══ Firebase ═══ */
+async function saveScoreToCloud(name, score, level) {
+  try {
+    if (cheatDetected) return false;
+    if (score > MAX_SCORE || score < 1) return false;
+
+    await addDoc(collection(db, 'scores'), {
+      name: name, score: score, level: level, date: serverTimestamp()
+    });
+    return true;
+  } catch (e) {
+    console.error('Ошибка сохранения:', e);
+    return false;
+  }
+}
+
+async function loadTopFromCloud() {
+  try {
+    const q = query(collection(db, 'scores'), orderBy('score', 'desc'), limit(10));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data());
+  } catch (e) {
+    console.error('Ошибка загрузки:', e);
+    try { return JSON.parse(localStorage.getItem(BOARD_CACHE_KEY) || '[]'); }
+    catch { return []; }
+  }
+}
+
+function renderBoard(list) {
+  boardList.innerHTML = '';
+  if (!list || list.length === 0) {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="empty">Пока пусто — стань первым!</span>';
+    boardList.appendChild(li);
+    return;
+  }
+  list.forEach((entry, i) => {
+    const li = document.createElement('li');
+    if (i === 0) li.classList.add('top1');
+    else if (i === 1) li.classList.add('top2');
+    else if (i === 2) li.classList.add('top3');
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.';
+    li.innerHTML = `<span>${medal} <span class="name">${escapeHtml(entry.name)}</span></span>
+                    <span>${entry.score}</span>`;
+    boardList.appendChild(li);
+  });
+}
+
+async function loadAndRenderBoard() {
+  boardLoading.style.display = 'block';
+  boardList.innerHTML = '';
+  const list = await loadTopFromCloud();
+  boardLoading.style.display = 'none';
+  renderBoard(list);
+  try { localStorage.setItem(BOARD_CACHE_KEY, JSON.stringify(list)); } catch {}
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+/* ═══ Changelog ═══ */
+const CHANGELOG = [
+  { ver: "2.2.0", items: [
+    "🆕 новое главное меню с экранами",
+    "🛡️ простой античит:",
+    "— максимум 500 очков",
+    "— проверка очков в секунду",
+    "— защита от автокликера",
+    "— санитизация имени",
+    "⚔️ раздел «Дуэль» (скоро)",
+    "🎁 раздел «Battle Pass» (скоро)"
+  ]},
+  { ver: "2.0.0", items: [
+    "онлайн-таблица рекордов",
+    "ввод имени игрока",
+    "топ-10 игроков",
+    "медали 🥇🥈🥉"
+  ]},
+  { ver: "1.0.0", items: ["первый релиз"] }
+];
+
+function renderChangelog() {
+  changelogList.innerHTML = '';
+  CHANGELOG.forEach(block => {
+    const ver = document.createElement('div');
+    ver.className = 'ver';
+    ver.textContent = 'v' + block.ver;
+    changelogList.appendChild(ver);
+    block.items.forEach(text => {
+      const item = document.createElement('div');
+      item.className = 'item';
+      item.textContent = text;
+      changelogList.appendChild(item);
+    });
+  });
+}
+
+/* ═══ Старт/конец игры ═══ */
+function startGame() {
+  clearTimeout(hideTimer); clearTimeout(freezeTimer); clearInterval(tickTimer);
+  if (current) { current.el.remove(); current = null; }
+
+  clickCount = 0;
+  lastClickTime = 0;
+  clickIntervals = [];
+  gameStartTime = performance.now();
+  cheatDetected = false;
+
+  playerName = sanitizeName(nameInput.value);
+  nameInput.value = playerName;
+  localStorage.setItem('playerName', playerName);
+
+  score = 0; combo = 0; lives = 3;
+  timeLeft = totalTime;
+  playing = true; frozen = false; ended = false;
+  game.classList.remove('frozen');
+  scoreEl.textContent = 0;
+  updateCombo(); updateLives();
+  timerFill.style.width = '100%';
+  gameStart.classList.add('hidden');
+
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  spawn();
+  resumeTimer();
+}
+
+async function endGame() {
+  if (ended) return;
+  ended = true; playing = false;
+
+  clearTimeout(hideTimer); clearTimeout(freezeTimer); clearInterval(tickTimer);
+  game.classList.remove('frozen');
+  if (current) { current.el.remove(); current = null; }
+
+  const valid = validateFinalScore();
+
+  if (cheatDetected) {
+    showCheatWarning();
+    gameStart.querySelector('h2').textContent = '🚫 Накрутка!';
+    gameStart.querySelector('p').textContent = 
+      `Очки: ${score}. Рекорд не сохранён. Играй честно!`;
+    startBtn.textContent = 'Играть снова';
+    gameStart.classList.remove('hidden');
+    return;
+  }
+
+  if (score > best) {
+    best = score;
+    localStorage.setItem('bestScore', best);
+    bestEl.textContent = best;
+  }
+
+  let inTop = false;
+  if (score > 0 && valid) {
+    const ok = await saveScoreToCloud(playerName, score, levelName);
+    if (ok) {
+      const top = await loadTopFromCloud();
+      inTop = top.some(e => e.name === playerName && e.score === score);
+      try { localStorage.setItem(BOARD_CACHE_KEY, JSON.stringify(top)); } catch {}
+    }
+  }
+
+  beep(440, 0.15);
+  setTimeout(() => beep(330, 0.25), 150);
+
+  const dead = lives <= 0;
+  gameStart.querySelector('h2').textContent = dead ? 'Жизни кончились' : 'Время вышло!';
+  gameStart.querySelector('p').textContent =
+    `Очки: ${score}. Рекорд: ${best}.` +
+    (inTop ? ' 🎉 Ты в топ-10!' : '') +
+    (playerName ? ` (${playerName})` : '');
+  startBtn.textContent = 'Играть снова';
+  gameStart.classList.remove('hidden');
+}
+
+startBtn.addEventListener('click', startGame);
+
+console.log(`Поймай квадрат v${GAME_VERSION} · новое меню + античит`);
+</script>
+</body>
+</html>
